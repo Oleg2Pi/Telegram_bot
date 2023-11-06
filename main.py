@@ -1,16 +1,12 @@
 import telebot
 import requests
 import json
+from config import TOKEN, keys
+from utils import APIException, CryptoConverter
 
-TOKEN = '6826299493:AAHgy5FvpOaNHMBeMwX621tRiEmD2GpNm8s'
-
-keys = {
-    'евро': 'EUR',
-    'доллар': 'USD',
-    'рубль': 'RUB'
-}
 
 bot = telebot.TeleBot(TOKEN)
+
 
 @bot.message_handler(commands=['start', 'help'])
 def start(message: telebot.types.Message):
@@ -20,6 +16,7 @@ def start(message: telebot.types.Message):
 Чтобы увидеть список доступных валют, введите /values'
     bot.reply_to(message, text)
 
+
 @bot.message_handler(commands=['values'])
 def values(message: telebot.types.Message):
     text = 'Доступные валюты:'
@@ -27,14 +24,27 @@ def values(message: telebot.types.Message):
         text = '\n'.join((text, key))
     bot.reply_to(message, text)
 
+
 @bot.message_handler(content_types=['text'])
 def convert(message: telebot.types.Message):
-    values = message.text.split(' ')
-    base, quote, amount = values
+    try:
+        values = message.text.split(' ')
 
-    response = requests.get(f'https://min-api.cryptocompare.com/data/price?fsym={keys[base]}&tsyms={keys[quote]}')
-    total_quote = json.loads(response.content)[keys[quote]] * float(amount)
-    text = f'Цена на {amount} {base} в {quote} составляет {total_quote}'
-    bot.send_message(message.chat.id, text)
+        if len(values) == 1 and values[0].startswith('/'):
+            raise Exception()
 
+        if len(values) != 3:
+            raise APIException('Количество параметров не соответствует правильному запросу.')
+        
+        base, quote, amount = values
+        total_quote = CryptoConverter.get_price(base, quote, amount)
+    except APIException as e:
+        bot.reply_to(message, f'Ошибка пользователя.\n{e}')
+    except Exception as e:
+        bot.reply_to(message, f'Не удалось обработать команду.\n{e}')
+    else:
+        text = f'Цена на {amount} {base} в {quote} составляет {total_quote}'
+        bot.send_message(message.chat.id, text)
+    
+    
 bot.polling(non_stop=True)
